@@ -109,11 +109,13 @@ func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 	sms := SMS{}
 	err := json.NewDecoder(r.Body).Decode(&sms)
 	if err != nil {
+		log.Error().Err(err).Msgf("Error decoding request body: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if sms.PhoneNumber == "" || sms.Message == "" {
+		log.Error().Msg("Missing required fields")
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
