@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -105,11 +107,22 @@ func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// unmarschal the request body
-	sms := SMS{}
-	err := json.NewDecoder(r.Body).Decode(&sms)
+	// Read body
+	b, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
-		log.Error().Err(err).Msgf("Error decoding request body: %v", err)
+		log.Error().Err(err).Msg("Error reading request body")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// TOFIX: remove new lines from body to avoid json decoding error
+	body := strings.ReplaceAll(string(b), "\n", "")
+	// unmarschal the request body
+	var sms SMS
+	err = json.Unmarshal([]byte(body), &sms)
+	if err != nil {
+		log.Error().Err(err).Msgf("Error decoding request body: %v", string(b))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
