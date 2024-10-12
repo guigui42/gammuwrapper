@@ -1,0 +1,10 @@
+services:
+    gammuwrapper:
+        container_name: gammuwrapper
+        #network_mode: host
+        image: guigui4242/gammuwrapper
+        restart: always
+        ports:
+            - 8083:8083
+        devices:
+            - '/dev/serial/by-id/usb-ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ_HUAWEI_Mobile-if00-port0:/dev/ttyUSB1'

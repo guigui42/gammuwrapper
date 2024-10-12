@@ -1,0 +1,20 @@
+version: '3.4'
+services:
+  uptime:
+    image: louislam/uptime-kuma
+    container_name: uptime
+    restart: always
+    volumes:
+      - uptime:/app/data
+      - /var/run/docker.sock:/app/data/docker.sock
+
+  gammuwrapperuptime:
+    container_name: gammuwrapperuptime
+    image: guigui4242/gammuwrapper
+    restart: always
+    devices:
+      - '/dev/serial/by-id/usb-ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ_HUAWEI_Mobile-if00-port0:/dev/ttyUSB1'
+
+volumes:
+  uptime:
+    name: uptime

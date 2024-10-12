@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,8 +25,8 @@ type Server struct {
 }
 
 type SMS struct {
-	PhoneNumber string
-	Message     string
+	PhoneNumber string `json:"phone_number"`
+	Message     string `json:"message"`
 }
 
 var smsServer *Server
@@ -36,6 +37,10 @@ func main() {
 	// log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05", NoColor: false})
 	loglevel, _ := zerolog.ParseLevel("INFO")
 	zerolog.SetGlobalLevel(loglevel)
+
+	// CONFIGURATION
+	// Load environment variables
+	conf.LoadConf()
 
 	smsServer = CreateNewServer()
 	smsServer.logger = &log.Logger
@@ -76,6 +81,7 @@ func main() {
 		serverStopCtx()
 	}()
 
+	log.Info().Msgf("Server 2 started on port %v", conf.Conf.Port)
 	// Run the server
 	err := server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
@@ -98,13 +104,26 @@ func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Queue is not initialized"))
 		return
 	}
-	err := smsServer.queue.Enqueue(SMS{PhoneNumber: "0033619651893", Message: "Hello World!"})
+
+	// unmarschal the request body
+	sms := SMS{}
+	err := json.NewDecoder(r.Body).Decode(&sms)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if sms.PhoneNumber == "" || sms.Message == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	err = smsServer.queue.Enqueue(sms)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error sending SMS: %v", err)
 		return
 	}
 	w.Write([]byte("SMS added to queue"))
-
 }
 
 func CreateNewServer() *Server {
