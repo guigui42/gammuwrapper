@@ -17,7 +17,10 @@ Use one of the example docker compose files
 
 [compose example](docker_example/docker-compose.yml)
 
-
+make sure to map your device (usb modem) to this one :
+```
+/dev/ttyUSB1
+```
 ### REST call Example
 Send an SMS using a simple POST REST call :
 ```
@@ -27,7 +30,7 @@ http://gammudocker:8083/sendsms
 ```
 {
     "phone_number" : "XXXXXXXXXXX",
-    "message" : "test json 4242"
+    "message" : "My Text Message"
 }
 ```
 
