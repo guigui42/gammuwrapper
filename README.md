@@ -6,7 +6,7 @@
 - Docker installation
 
 Tested with Huawei E169 
-But should work with any [Gammu](https://wammu.eu/smsd/)  compatible usb dongle 
+But should work with any [Gammu](https://wammu.eu/smsd/)  compatible usb modem 
 
 ### Docker install
 
@@ -14,6 +14,9 @@ But should work with any [Gammu](https://wammu.eu/smsd/)  compatible usb dongle
 docker pull ghcr.io/guigui42/gammuwrapper:latest
 ```
 Use one of the example docker compose files
+
+[compose example](docker_example/docker-compose.yml)
+
 
 ### REST call Example
 Send an SMS using a simple POST REST call :
@@ -33,6 +36,7 @@ replace XXXXXXXXXXX with your phone number.
 ### Uptime Kuma
 Can be used with Uptime Kuma as a Notification method (using custom Webhooks)
 it looks something like that :
+
 <img src="ttps://github.com/user-attachments/assets/094c0d02-ce5e-4f74-95ed-b42e7929ef18" width="80" />
 
 
