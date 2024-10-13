@@ -3,6 +3,8 @@ GammuWrapper : a simple way to send SMS locally (no internet connectivity requir
 Tested with Huawei E169 
 But should work with any Gammu compatible usb dongle, see https://wammu.eu/smsd/
 
+Run directly inside docker ( ghcr.io/guigui42/gammuwrapper )
+
 Can be used with Uptime Kuma (using custom Webhooks)
 
 Send an SMS using a simple POST REST call :
