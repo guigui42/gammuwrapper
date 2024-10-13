@@ -23,6 +23,7 @@ make sure to map your device (usb modem) to this one :
 ```
 ### How it works
 - Built with Go
+- Uses [Gammu](https://wammu.eu/smsd/) in the backend to manage and use the USB Modem
 - Uses a queue to send SMS to avoid making the device busy and unusable
 - Chi webserver to handle API call
 
