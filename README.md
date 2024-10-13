@@ -21,6 +21,11 @@ make sure to map your device (usb modem) to this one :
 ```
 /dev/ttyUSB1
 ```
+### How it works
+- Built with Go
+- Uses a queue to send SMS to avoid making the device busy and unusable
+- Chi webserver to handle API call
+
 ### REST call Example
 Send an SMS using a simple POST REST call :
 ```
@@ -50,6 +55,7 @@ Using this custom body :
 "message":"Uptime Kuma Altert - {{ monitorJSON['name'] }} {{ msg }}"
 }
 ```
+
 ### TODO 
 - Better documentation
 - Uptime Kuma instructions
