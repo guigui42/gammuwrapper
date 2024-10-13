@@ -46,3 +46,8 @@ Using this custom body :
 ### TODO 
 - Better documentation
 - Uptime Kuma instructions
+
+### Security notes
+There is no authentification / authorization.
+
+It is made to run locally only (ie: not opened to the outside world) in a home setup for example and accessed by a third party running along side in Docker (like Uptime Kuma) to send notifications
