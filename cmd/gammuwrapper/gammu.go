@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os/exec"
+	"strconv"
 
 	"github.com/guigui42/gammuwrapper/conf"
 	"github.com/rs/zerolog/log"
@@ -10,7 +11,7 @@ import (
 
 func sendSMS(ctx context.Context, sms SMS) ([]byte, error) {
 
-	cmd := exec.CommandContext(ctx, "gammu", `-c`, conf.Conf.GammuConf, `--sendsms`, `TEXT`, sms.PhoneNumber, `-textutf8`, sms.Message)
+	cmd := exec.CommandContext(ctx, "gammu", `-c`, conf.Conf.GammuConf, `--sendsms`, `TEXT`, sms.PhoneNumber, `-text`, sms.Message, "-autolen", strconv.Itoa(len(sms.Message)))
 
 	log.Info().Msg(cmd.Dir)
 	log.Info().Msg("Sending SMS")
