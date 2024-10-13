@@ -2,7 +2,7 @@ services:
     gammuwrapper:
         container_name: gammuwrapper
         #network_mode: host
-        image: guigui4242/gammuwrapper
+        image: ghcr.io/guigui42/gammuwrapper
         restart: always
         ports:
             - 8083:8083

@@ -10,7 +10,7 @@ services:
 
   gammuwrapperuptime:
     container_name: gammuwrapperuptime
-    image: guigui4242/gammuwrapper
+    image: ghcr.io/guigui42/gammuwrapper
     restart: always
     devices:
       - '/dev/serial/by-id/usb-ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ_HUAWEI_Mobile-if00-port0:/dev/ttyUSB1'

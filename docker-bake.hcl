@@ -1,6 +1,6 @@
 
 variable "ECR_REGISTRY" {
-  default = "guigui4242"
+  default = "ghcr.io/guigui42"
 }
 
 variable "TAGVERSION" {
