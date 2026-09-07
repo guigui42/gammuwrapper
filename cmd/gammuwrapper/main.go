@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -19,19 +16,17 @@ import (
 )
 
 type Server struct {
-	Router *chi.Mux
-	queue  *BQueue
-	worker *Worker
-	logger *zerolog.Logger
-	// Db, config can be added here
+	Router      *chi.Mux
+	gammu       Gammu
+	logger      *zerolog.Logger
+	sendTimeout time.Duration
+	modemSlot   chan struct{}
 }
 
 type SMS struct {
 	PhoneNumber string `json:"phone_number"`
 	Message     string `json:"message"`
 }
-
-var smsServer *Server
 
 func main() {
 	// LOGGING
@@ -42,16 +37,13 @@ func main() {
 
 	// CONFIGURATION
 	// Load environment variables
-	conf.LoadConf()
+	if err := conf.LoadConf(); err != nil {
+		log.Fatal().Err(err).Msg("error loading configuration")
+	}
 
-	smsServer = CreateNewServer()
+	smsServer := CreateNewServer()
 	smsServer.logger = &log.Logger
 	smsServer.MountHandlers()
-
-	// Execute SMS jobs in queue in the background.
-	go func() {
-		smsServer.worker.WaitForSMS()
-	}()
 
 	// The HTTP Server
 	server := &http.Server{Addr: fmt.Sprintf("0.0.0.0:%v", conf.Conf.Port), Handler: smsServer.Router}
@@ -66,7 +58,8 @@ func main() {
 		<-sig
 
 		// Shutdown signal with grace period of 30 seconds
-		shutdownCtx, _ := context.WithTimeout(serverCtx, 30*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(serverCtx, 30*time.Second)
+		defer shutdownCancel()
 
 		go func() {
 			<-shutdownCtx.Done()
@@ -94,59 +87,22 @@ func main() {
 	<-serverCtx.Done()
 }
 
-// AddSMSToQueue api Handler
-func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
-	if smsServer == nil {
-		log.Error().Msg("Server is not initialized")
-		w.Write([]byte("Server is not initialized"))
-		return
-	}
-	if smsServer.queue == nil {
-		log.Error().Msg("Queue is not initialized")
-		w.Write([]byte("Queue is not initialized"))
-		return
-	}
-
-	// Read body
-	b, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		log.Error().Err(err).Msg("Error reading request body")
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// TOFIX: remove new lines from body to avoid json decoding error
-	body := strings.ReplaceAll(string(b), "\n", "")
-	// unmarschal the request body
-	var sms SMS
-	err = json.Unmarshal([]byte(body), &sms)
-	if err != nil {
-		log.Error().Err(err).Msgf("Error decoding request body: %v", string(b))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if sms.PhoneNumber == "" || sms.Message == "" {
-		log.Error().Msg("Missing required fields")
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
-		return
-	}
-
-	err = smsServer.queue.Enqueue(sms)
-	if err != nil {
-		log.Error().Err(err).Msgf("Error sending SMS: %v", err)
-		return
-	}
-	w.Write([]byte("SMS added to queue"))
+func CreateNewServer() *Server {
+	return newServer(
+		NewGammuClient(conf.Conf.GammuConf, ExecCommandRunner{}),
+		time.Duration(conf.Conf.GammuSendTimeoutSeconds)*time.Second,
+	)
 }
 
-func CreateNewServer() *Server {
-	s := &Server{}
-	s.Router = chi.NewRouter()
-	s.queue = NewQueue(conf.Conf.SMSQueueMaxSize)
+func newServer(gammu Gammu, sendTimeout time.Duration) *Server {
+	slot := make(chan struct{}, 1)
+	slot <- struct{}{}
 
-	// Defines a queue worker, which will execute our queue.
-	s.worker = NewWorker(s.queue)
-	return s
+	return &Server{
+		Router:      chi.NewRouter(),
+		gammu:       gammu,
+		logger:      &log.Logger,
+		sendTimeout: sendTimeout,
+		modemSlot:   slot,
+	}
 }

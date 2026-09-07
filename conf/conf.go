@@ -2,6 +2,7 @@ package conf
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/knadh/koanf"
@@ -15,9 +16,9 @@ import (
 var K = koanf.New(".")
 
 type Config struct {
-	GammuConf       string `koanf:"GAMMUCONF"`
-	Port            int    `koanf:"SERVERPORT"`
-	SMSQueueMaxSize int    `koanf:"SMSQUEUEMAXSIZE"`
+	GammuConf               string `koanf:"GAMMUCONF"`
+	Port                    int    `koanf:"SERVERPORT"`
+	GammuSendTimeoutSeconds int    `koanf:"GAMMUSENDTIMEOUTSECONDS"`
 }
 
 var Conf Config
@@ -34,9 +35,9 @@ func LoadConf() error {
 
 	// Loading Default values
 	err := K.Load(confmap.Provider(map[string]interface{}{
-		"GAMMUCONF":       "/etc/gammu-smsdrc",
-		"SERVERPORT":      8083,
-		"SMSQUEUEMAXSIZE": 10,
+		"GAMMUCONF":               "/etc/gammu-smsdrc",
+		"SERVERPORT":              8083,
+		"GAMMUSENDTIMEOUTSECONDS": 45,
 	}, "."), nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error loading default config")
@@ -59,6 +60,9 @@ func LoadConf() error {
 	err = K.Unmarshal("", &Conf)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error Unmarshal config")
+	}
+	if Conf.GammuSendTimeoutSeconds <= 0 {
+		return fmt.Errorf("GAMMUSENDTIMEOUTSECONDS must be greater than zero")
 	}
 
 	log.Trace().Msgf("CONF is %%+v: %+v\n", Conf)

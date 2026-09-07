@@ -1,4 +1,3 @@
-version: '3.4'
 services:
   uptime:
     image: louislam/uptime-kuma
@@ -10,10 +9,17 @@ services:
 
   gammuwrapperuptime:
     container_name: gammuwrapperuptime
-    image: ghcr.io/guigui42/gammuwrapper
+    image: ghcr.io/guigui42/gammuwrapper:latest
     restart: always
+    environment:
+      GAMMUSENDTIMEOUTSECONDS: "45"
     devices:
       - '/dev/serial/by-id/usb-ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ_HUAWEI_Mobile-if00-port0:/dev/ttyUSB1'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8083/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
 volumes:
   uptime:
