@@ -1,70 +1,105 @@
 # GammuWrapper
+
 ## A simple way to send SMS locally (no internet connectivity required)
 
 ### Prerequisites
+
 - USB Modem
 - Docker installation
 
-Tested with Huawei E169 
-But should work with any [Gammu](https://wammu.eu/smsd/)  compatible usb modem 
+Tested with Huawei E169, but should work with any [Gammu](https://wammu.eu/smsd/) compatible USB modem.
 
 ### Docker install
 
-```
+```shell
 docker pull ghcr.io/guigui42/gammuwrapper:latest
 ```
-Use one of the example docker compose files
 
-[compose example](docker_example/docker-compose.yml)
+Use one of the example Docker Compose files:
 
-make sure to map your device (usb modem) to this one :
-```
+- [Standalone example](docker_example/docker-compose.yml)
+- [Uptime Kuma example](docker_example/docker-compose-uptimekuma.yml)
+
+Map your USB modem to:
+
+```text
 /dev/ttyUSB1
 ```
+
+The default send timeout is 45 seconds. Keep production values greater than 30 seconds so Gammu can complete its normal mobile-network wait. Override it with:
+
+```yaml
+environment:
+  GAMMUSENDTIMEOUTSECONDS: "60"
+```
+
 ### How it works
+
 - Built with Go
-- Uses [Gammu](https://wammu.eu/smsd/) in the backend to manage and use the USB Modem
-- Uses a queue to send SMS to avoid making the device busy and unusable
-- Chi webserver to handle API call
+- Uses [Gammu](https://wammu.eu/smsd/) to manage the USB modem
+- Serializes modem access so only one Gammu operation runs at a time
+- Waits for `gammu --sendsms` to finish before returning HTTP success
+- Uses the Chi web server to handle API calls
 
 ### REST call Example
-Send an SMS using a simple POST REST call :
-```
-http://gammudocker:8083/sendsms
-```
 
-```
+Send an SMS with a `POST` request to `http://gammudocker:8083/sendsms`:
+
+```json
 {
-    "phone_number" : "XXXXXXXXXXX",
-    "message" : "My Text Message"
+  "phone_number": "+15555550100",
+  "message": "Test notification"
 }
 ```
 
-replace XXXXXXXXXXX with your phone number.
+A `200` response means the Gammu subprocess completed successfully. Errors use non-2xx responses:
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Invalid JSON or missing required fields |
+| `429` | Another modem operation is already running |
+| `502` | Gammu exited unsuccessfully |
+| `504` | Gammu exceeded `GAMMUSENDTIMEOUTSECONDS` |
+
+### Diagnostics
+
+The diagnostic endpoints never send an SMS:
+
+| Endpoint | Check |
+| --- | --- |
+| `GET /health` | HTTP process is responding |
+| `GET /health/modem` | Gammu can identify the modem device |
+| `GET /health/network` | The modem reports home or roaming network registration |
+
+The Docker health check uses `/health`, so a missing modem does not restart an otherwise healthy HTTP process. Monitor `/health/modem` and `/health/network` separately when you need device and mobile-network diagnostics.
 
 ### Uptime Kuma
-Can be used with Uptime Kuma as a Notification method (using custom Webhooks)
-it looks something like that :
 
-<img src="ttps://github.com/user-attachments/assets/094c0d02-ce5e-4f74-95ed-b42e7929ef18" width="80" />
+GammuWrapper can be used as an Uptime Kuma custom webhook notification. Configure the webhook URL as:
 
-
-Using this custom body :
+```text
+http://gammuwrapperuptime:8083/sendsms
 ```
+
+Use this custom JSON body, replacing the placeholder with your destination number:
+
+```json
 {
-"phone_number" : "0033XXXXXXXX",
-"message":"Uptime Kuma Altert - {{ monitorJSON['name'] }} {{ msg }}"
+  "phone_number": "+15555550100",
+  "message": "Uptime Kuma alert - {{ monitorJSON['name'] }} {{ msg }}"
 }
 ```
 
-### TODO 
+Uptime Kuma records success only after Gammu finishes sending. A busy modem, timeout, or Gammu failure returns a non-2xx status.
+
+### TODO
+
 - Better documentation
 - Uptime Kuma instructions
 
 > [!CAUTION]
 > **Security notes**
-> 
-> There is no authentification / authorization.
-> 
-> It is made to run locally only (ie: not opened to the outside world) in a home setup for example and accessed by a third party running along side in Docker (like Uptime Kuma) to send notifications
-
+>
+> There is no authentication or authorization.
+>
+> Run this service only on a trusted local network. Do not expose it to the internet.
