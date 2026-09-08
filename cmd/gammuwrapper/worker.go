@@ -1,18 +1,27 @@
 package main
 
 import (
+	"context"
+	"time"
+
 	"github.com/rs/zerolog/log"
 )
 
 // Worker responsible for queue serving.
 type Worker struct {
-	Queue *BQueue
+	Queue       *BQueue
+	Gammu       GammuOperations
+	Gate        *ModemGate
+	SendTimeout time.Duration
 }
 
 // NewWorker initializes a new Worker.
-func NewWorker(queue *BQueue) *Worker {
+func NewWorker(queue *BQueue, gammu GammuOperations, gate *ModemGate, sendTimeout time.Duration) *Worker {
 	return &Worker{
-		Queue: queue,
+		Queue:       queue,
+		Gammu:       gammu,
+		Gate:        gate,
+		SendTimeout: sendTimeout,
 	}
 }
 
@@ -26,11 +35,21 @@ func (w *Worker) WaitForSMS() bool {
 			return true
 		// if job received.
 		case job := <-w.Queue.channel:
-			_, err := sendSMS(w.Queue.ctx, job)
-			if err != nil {
-				log.Error().Err(err).Msgf("Error sending SMS: %v", err)
-				continue
-			}
+			w.send(job)
 		}
+	}
+}
+
+func (w *Worker) send(sms SMS) {
+	if err := w.Gate.Acquire(w.Queue.ctx); err != nil {
+		return
+	}
+	defer w.Gate.Release()
+
+	ctx, cancel := context.WithTimeout(w.Queue.ctx, w.SendTimeout)
+	defer cancel()
+
+	if err := w.Gammu.SendSMS(ctx, sms); err != nil {
+		log.Error().Msg("SMS send failed")
 	}
 }

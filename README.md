@@ -42,6 +42,29 @@ http://gammudocker:8083/sendsms
 
 replace XXXXXXXXXXX with your phone number.
 
+The endpoint returns HTTP 200 with `SMS added to queue` after the message is
+accepted by the in-memory queue. It returns HTTP 503 when the queue is full.
+Delivery remains asynchronous.
+
+### Health endpoints
+
+- `GET /health` checks the HTTP process.
+- `GET /health/modem` checks that Gammu can identify the modem.
+- `GET /health/network` checks that the modem is registered on a home or
+  roaming network.
+
+Modem and network checks return HTTP 503 when the modem is busy, a command
+times out, or the requested capability is unavailable. Health responses do not
+include modem identifiers, operator details, phone numbers, message bodies, or
+raw Gammu output.
+
+The network check validates registration state only. It does not test signal
+quality, SMS delivery, or internet connectivity.
+
+Gammu send commands time out after `GAMMUSENDTIMEOUTSECONDS` (default `45`).
+Health diagnostics time out after `GAMMUDIAGNOSTICTIMEOUTSECONDS` (default
+`10`). Both values must be positive.
+
 ### Uptime Kuma
 Can be used with Uptime Kuma as a Notification method (using custom Webhooks)
 it looks something like that :
@@ -67,4 +90,3 @@ Using this custom body :
 > There is no authentification / authorization.
 > 
 > It is made to run locally only (ie: not opened to the outside world) in a home setup for example and accessed by a third party running along side in Docker (like Uptime Kuma) to send notifications
-

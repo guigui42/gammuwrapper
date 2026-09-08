@@ -19,11 +19,13 @@ import (
 )
 
 type Server struct {
-	Router *chi.Mux
-	queue  *BQueue
-	worker *Worker
-	logger *zerolog.Logger
-	// Db, config can be added here
+	Router            *chi.Mux
+	queue             *BQueue
+	worker            *Worker
+	logger            *zerolog.Logger
+	gammu             GammuOperations
+	modemGate         *ModemGate
+	diagnosticTimeout time.Duration
 }
 
 type SMS struct {
@@ -42,7 +44,9 @@ func main() {
 
 	// CONFIGURATION
 	// Load environment variables
-	conf.LoadConf()
+	if err := conf.LoadConf(); err != nil {
+		log.Fatal().Err(err).Msg("invalid configuration")
+	}
 
 	smsServer = CreateNewServer()
 	smsServer.logger = &log.Logger
@@ -66,7 +70,8 @@ func main() {
 		<-sig
 
 		// Shutdown signal with grace period of 30 seconds
-		shutdownCtx, _ := context.WithTimeout(serverCtx, 30*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(serverCtx, 30*time.Second)
+		defer shutdownCancel()
 
 		go func() {
 			<-shutdownCtx.Done()
@@ -95,24 +100,17 @@ func main() {
 }
 
 // AddSMSToQueue api Handler
-func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
-	if smsServer == nil {
-		log.Error().Msg("Server is not initialized")
-		w.Write([]byte("Server is not initialized"))
-		return
-	}
-	if smsServer.queue == nil {
-		log.Error().Msg("Queue is not initialized")
-		w.Write([]byte("Queue is not initialized"))
-		return
-	}
-
+func (s *Server) AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 	// Read body
 	b, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() {
+		if closeErr := r.Body.Close(); closeErr != nil {
+			log.Error().Msg("Error closing request body")
+		}
+	}()
 	if err != nil {
-		log.Error().Err(err).Msg("Error reading request body")
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Error().Msg("Error reading request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -122,8 +120,8 @@ func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 	var sms SMS
 	err = json.Unmarshal([]byte(body), &sms)
 	if err != nil {
-		log.Error().Err(err).Msgf("Error decoding request body: %v", string(b))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Error().Msg("Error decoding request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -133,20 +131,40 @@ func AddSMSToQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = smsServer.queue.Enqueue(sms)
+	err = s.queue.Enqueue(sms)
 	if err != nil {
-		log.Error().Err(err).Msgf("Error sending SMS: %v", err)
+		if err == ErrQueueFull {
+			http.Error(w, "SMS queue is full", http.StatusServiceUnavailable)
+			return
+		}
+		log.Error().Err(err).Msg("Error adding SMS to queue")
+		http.Error(w, "Unable to add SMS to queue", http.StatusInternalServerError)
 		return
 	}
-	w.Write([]byte("SMS added to queue"))
+	if _, err := w.Write([]byte("SMS added to queue")); err != nil {
+		log.Error().Msg("Error writing response")
+	}
 }
 
 func CreateNewServer() *Server {
-	s := &Server{}
-	s.Router = chi.NewRouter()
-	s.queue = NewQueue(conf.Conf.SMSQueueMaxSize)
+	gammu := NewGammuClient(conf.Conf.GammuConf, ExecCommandRunner{})
+	return NewServer(
+		conf.Conf.SMSQueueMaxSize,
+		gammu,
+		time.Duration(conf.Conf.GammuSendTimeoutSeconds)*time.Second,
+		time.Duration(conf.Conf.GammuDiagnosticTimeoutSeconds)*time.Second,
+	)
+}
 
-	// Defines a queue worker, which will execute our queue.
-	s.worker = NewWorker(s.queue)
-	return s
+func NewServer(queueSize int, gammu GammuOperations, sendTimeout, diagnosticTimeout time.Duration) *Server {
+	queue := NewQueue(queueSize)
+	gate := NewModemGate()
+	return &Server{
+		Router:            chi.NewRouter(),
+		queue:             queue,
+		worker:            NewWorker(queue, gammu, gate, sendTimeout),
+		gammu:             gammu,
+		modemGate:         gate,
+		diagnosticTimeout: diagnosticTimeout,
+	}
 }

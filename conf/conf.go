@@ -2,6 +2,7 @@ package conf
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/knadh/koanf"
@@ -14,10 +15,20 @@ import (
 
 var K = koanf.New(".")
 
+const (
+	defaultGammuConf                     = "/etc/gammu-smsdrc"
+	defaultPort                          = 8083
+	defaultSMSQueueMaxSize               = 10
+	defaultGammuSendTimeoutSeconds       = 45
+	defaultGammuDiagnosticTimeoutSeconds = 10
+)
+
 type Config struct {
-	GammuConf       string `koanf:"GAMMUCONF"`
-	Port            int    `koanf:"SERVERPORT"`
-	SMSQueueMaxSize int    `koanf:"SMSQUEUEMAXSIZE"`
+	GammuConf                     string `koanf:"GAMMUCONF"`
+	Port                          int    `koanf:"SERVERPORT"`
+	SMSQueueMaxSize               int    `koanf:"SMSQUEUEMAXSIZE"`
+	GammuSendTimeoutSeconds       int    `koanf:"GAMMUSENDTIMEOUTSECONDS"`
+	GammuDiagnosticTimeoutSeconds int    `koanf:"GAMMUDIAGNOSTICTIMEOUTSECONDS"`
 }
 
 var Conf Config
@@ -34,9 +45,11 @@ func LoadConf() error {
 
 	// Loading Default values
 	err := K.Load(confmap.Provider(map[string]interface{}{
-		"GAMMUCONF":       "/etc/gammu-smsdrc",
-		"SERVERPORT":      8083,
-		"SMSQUEUEMAXSIZE": 10,
+		"GAMMUCONF":                     defaultGammuConf,
+		"SERVERPORT":                    defaultPort,
+		"SMSQUEUEMAXSIZE":               defaultSMSQueueMaxSize,
+		"GAMMUSENDTIMEOUTSECONDS":       defaultGammuSendTimeoutSeconds,
+		"GAMMUDIAGNOSTICTIMEOUTSECONDS": defaultGammuDiagnosticTimeoutSeconds,
 	}, "."), nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error loading default config")
@@ -61,6 +74,15 @@ func LoadConf() error {
 		log.Fatal().Err(err).Msg("error Unmarshal config")
 	}
 
-	log.Trace().Msgf("CONF is %%+v: %+v\n", Conf)
+	return Conf.Validate()
+}
+
+func (c Config) Validate() error {
+	if c.GammuSendTimeoutSeconds <= 0 {
+		return fmt.Errorf("GAMMUSENDTIMEOUTSECONDS must be positive")
+	}
+	if c.GammuDiagnosticTimeoutSeconds <= 0 {
+		return fmt.Errorf("GAMMUDIAGNOSTICTIMEOUTSECONDS must be positive")
+	}
 	return nil
 }
