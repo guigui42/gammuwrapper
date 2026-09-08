@@ -52,6 +52,19 @@ func newTestServer(t *testing.T, queueSize int, gammu GammuOperations) *Server {
 	return server
 }
 
+func startWorker(t *testing.T, server *Server) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.worker.WaitForSMS()
+	}()
+	t.Cleanup(func() {
+		server.queue.cancel()
+		<-done
+	})
+}
+
 func executeRequest(req *http.Request, server *Server) *httptest.ResponseRecorder {
 	response := httptest.NewRecorder()
 	server.Router.ServeHTTP(response, req)
@@ -167,7 +180,7 @@ func TestDiagnosticReturnsBusyWhileWorkerUsesModem(t *testing.T) {
 		},
 	})
 
-	go server.worker.WaitForSMS()
+	startWorker(t, server)
 	require.NoError(t, server.queue.Enqueue(SMS{PhoneNumber: "private", Message: "private"}))
 	<-sendStarted
 
@@ -175,7 +188,6 @@ func TestDiagnosticReturnsBusyWhileWorkerUsesModem(t *testing.T) {
 	assertHealthResponse(t, response, http.StatusServiceUnavailable, "modem", "busy")
 
 	close(releaseSend)
-	server.queue.cancel()
 }
 
 func TestWorkerWaitsForDiagnosticAndUsesFreshSendTimeout(t *testing.T) {
@@ -206,7 +218,7 @@ func TestWorkerWaitsForDiagnosticAndUsesFreshSendTimeout(t *testing.T) {
 	}()
 	<-diagnosticStarted
 
-	go server.worker.WaitForSMS()
+	startWorker(t, server)
 	require.NoError(t, server.queue.Enqueue(SMS{PhoneNumber: "private", Message: "private"}))
 	select {
 	case <-sendFinished:
@@ -221,7 +233,6 @@ func TestWorkerWaitsForDiagnosticAndUsesFreshSendTimeout(t *testing.T) {
 
 	response := executeRequest(httptest.NewRequest(http.MethodGet, "/health/modem", nil), server)
 	assertHealthResponse(t, response, http.StatusOK, "modem", "ok")
-	server.queue.cancel()
 }
 
 func TestWorkerReleasesGateAfterSendFailure(t *testing.T) {
@@ -233,13 +244,12 @@ func TestWorkerReleasesGateAfterSendFailure(t *testing.T) {
 		},
 	})
 
-	go server.worker.WaitForSMS()
+	startWorker(t, server)
 	require.NoError(t, server.queue.Enqueue(SMS{PhoneNumber: "private", Message: "private"}))
 	<-sendFinished
 
 	response := executeRequest(httptest.NewRequest(http.MethodGet, "/health/modem", nil), server)
 	assertHealthResponse(t, response, http.StatusOK, "modem", "ok")
-	server.queue.cancel()
 }
 
 func TestDiagnosticReleasesGateAfterFailure(t *testing.T) {
